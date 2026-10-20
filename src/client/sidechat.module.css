@@ -1,0 +1,426 @@
+/*
+ * Side-chat browser styles (DSH 0.2.1).
+ *
+ * The chat body fills the right Sidebar's docked pane; it is a normal column of
+ * the page, not a card over it. The only frame-wide overlay entry is the small
+ * floating selection button, which opts back into pointer events itself.
+ */
+
+/* Docked tab body: header / scrolling transcript / composer inside the pane. */
+.tab {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  overflow: hidden;
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  flex-shrink: 0;
+}
+.headerTitle {
+  font-weight: 600;
+  font-size: 14px;
+  margin-right: auto;
+}
+.iconBtn {
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.iconBtn:hover {
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+}
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.empty {
+  margin: auto;
+  text-align: center;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 0 24px;
+}
+.msg {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 100%;
+}
+.msgUser {
+  align-self: flex-end;
+  align-items: flex-end;
+  max-width: 92%;
+}
+.msgAssistant {
+  align-self: flex-start;
+  width: 100%;
+}
+.msgRole {
+  font-size: 10px;
+  color: var(--dsw-alias-label-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.msgBody {
+  padding: 8px 10px;
+  border-radius: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+}
+.msgAssistant .msgBody {
+  background: transparent;
+  border: none;
+  padding: 2px 2px;
+  white-space: normal;
+}
+.msgUser .msgBody {
+  background: var(--dsw-alias-brand-primary);
+  color: #fff;
+  border-bottom-right-radius: 2px;
+  max-width: 100%;
+}
+.msgError {
+  font-size: 11px;
+  color: var(--dsw-alias-state-error-primary);
+}
+.error {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--dsw-alias-state-error-primary);
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+.mdP {
+  margin: 5px 0;
+}
+.mdH {
+  margin: 10px 0 5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.mdH1 {
+  font-size: 1.25em;
+}
+.mdH2 {
+  font-size: 1.15em;
+}
+.mdH3 {
+  font-size: 1.05em;
+}
+.mdH4 {
+  font-size: 1em;
+}
+.mdH5 {
+  font-size: 0.95em;
+}
+.mdH6 {
+  font-size: 0.9em;
+}
+.mdCode {
+  background: var(--dsw-alias-bg-layer-2);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+.mdPre {
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+.mdCodeblock {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  white-space: pre;
+}
+.mdList {
+  margin: 5px 0;
+  padding-left: 20px;
+}
+.mdQuote {
+  margin: 5px 0;
+  padding: 2px 10px;
+  border-left: 3px solid var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-secondary);
+}
+.mdHr {
+  border: none;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+  margin: 8px 0;
+}
+.mdLink {
+  color: var(--dsw-alias-brand-primary);
+  text-decoration: underline;
+}
+.composer {
+  margin: 10px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-1);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.composer:focus-within {
+  border-color: var(--dsw-alias-brand-primary);
+}
+.composerTools {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+.select {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  border: none;
+  border-radius: 6px;
+  padding: 3px 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.select:hover {
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+}
+.select:focus {
+  outline: none;
+}
+.inputRow {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  align-items: flex-end;
+}
+.input {
+  flex: 1;
+  resize: none;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  padding: 4px 6px;
+  font: inherit;
+}
+.input:focus {
+  outline: none;
+}
+.send {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: var(--dsw-alias-brand-primary);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+.send:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+.confirm span {
+  margin-right: auto;
+}
+.confirmBtn {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 10px;
+}
+.confirmBtn:hover {
+  background: var(--dsw-alias-bg-layer-1);
+}
+.confirmBtnDanger {
+  border-color: var(--dsw-alias-state-error-primary);
+  color: var(--dsw-alias-state-error-primary);
+}
+
+/* Floating selection-send button rendered beside the main-chat selection. */
+.sendsel {
+  position: fixed;
+  z-index: 1100;
+  transform: translateY(-100%);
+  margin-top: -6px;
+  padding: 4px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-overlay);
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+}
+.sendsel:hover {
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+/* Collapsible reasoning block. */
+.reasoning {
+  margin: 2px 0 6px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+.reasoning summary {
+  cursor: pointer;
+  padding: 5px 0;
+  user-select: none;
+}
+.reasoningBody {
+  white-space: pre-wrap;
+  padding: 2px 0 8px;
+  line-height: 1.5;
+}
+
+/* Markdown tables. */
+.mdTable {
+  border-collapse: collapse;
+  margin: 6px 0;
+  font-size: 12px;
+  width: 100%;
+}
+.mdTable th,
+.mdTable td {
+  border: 1px solid var(--dsw-alias-border-l1);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.mdTable th {
+  background: var(--dsw-alias-bg-layer-1);
+  font-weight: 600;
+}
+
+/* Marked-excerpt chip above the composer. */
+.markedChip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 8px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-left: 3px solid var(--dsw-alias-brand-primary);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-2);
+  font-size: 11px;
+}
+.markedLabel {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--dsw-alias-brand-primary);
+}
+.markedText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+}
+.markedClear {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.markedClear:hover {
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Panel footer tip: the side chat is ephemeral. */
+.tip {
+  padding: 4px 14px 10px;
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary);
+  text-align: center;
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+/* Selection-hint toggle in the tab header. */
+.switch {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+.switchTrack {
+  display: block;
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--dsw-alias-bg-layer-2);
+  border: 1px solid var(--dsw-alias-border-l2);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.switchTrack::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--dsw-alias-label-secondary);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.switch input:checked + .switchTrack {
+  background: var(--dsw-alias-brand-primary);
+  border-color: var(--dsw-alias-brand-primary);
+}
+.switch input:checked + .switchTrack::after {
+  transform: translateX(18px);
+  background: #fff;
+}

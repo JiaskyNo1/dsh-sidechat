@@ -1,0 +1,7 @@
+node_modules/
+lib/types/
+lib/*.map
+*.log
+.env
+.DS_Store
+Thumbs.db
