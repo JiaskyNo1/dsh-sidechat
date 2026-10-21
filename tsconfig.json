@@ -22,7 +22,7 @@
     "sourceMap": true,
     "rootDir": "src",
     "outDir": "lib/types",
-    "types": ["react"]
+    "types": ["react", "node"]
   },
   "include": [
     "src/**/*.ts",

@@ -425,13 +425,15 @@ export class SidechatService {
                 : String(failure)
             }
           }
-          if (job.error !== null) break
           const answer = this.sanitizeText(rawText).trim()
+          await this.debugLog({ id, attempt, sawToolMarkup, answerLength: answer.length, rawText: rawText.slice(0, 2_000), rawReasoning: rawReasoning.slice(0, 1_000), error: job.error })
+          if (job.error !== null) break
           if (answer !== '') { job.text = answer; break }
-          if (sawToolMarkup && attempt === 1) continue
-          job.text = sawToolMarkup
-            ? '（侧边聊天没有工具权限，无法读取文件或执行命令。这个问题请在主对话中继续；或者把相关代码/输出贴进这里。）'
-            : ''
+          // Empty visible text can come from a tool-only answer or from a model
+          // that only produced reasoning. Retry once with the hard no-tools rule;
+          // never leave the panel blank.
+          if (attempt === 1) continue
+          job.text = '（这次没有生成可显示的正文。若问题需要读取文件或执行命令，请回到主对话继续；也可以把相关代码或输出贴进这里再问。）'
           break
         }
       } catch (error) {
@@ -441,6 +443,18 @@ export class SidechatService {
       }
     })()
     return { jobId: id }
+  }
+
+  /** Append one diagnostic record when `DSH_SIDECHAT_DEBUG=1` (local debugging only). */
+  private async debugLog(entry: Record<string, unknown>): Promise<void> {
+    const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+    if (env?.DSH_SIDECHAT_DEBUG !== '1') return
+    try {
+      const { appendFile } = await import('node:fs/promises')
+      const { tmpdir } = await import('node:os')
+      const { join } = await import('node:path')
+      await appendFile(join(tmpdir(), 'dsh-sidechat-debug.jsonl'), `${JSON.stringify({ time: new Date().toISOString(), ...entry })}\n`)
+    } catch { /* diagnostics must never break a reply */ }
   }
 
   /** Remove DeepSeek tool-call markup from streamed model text. */

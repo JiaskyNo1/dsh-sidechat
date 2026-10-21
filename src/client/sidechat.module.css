@@ -416,3 +416,12 @@
   transform: translateX(18px);
   background: #fff;
 }
+
+/* Settled answer whose body was filtered tool markup. */
+.emptyBodyNotice {
+  display: block;
+  padding: 2px 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--dsw-alias-label-secondary);
+}

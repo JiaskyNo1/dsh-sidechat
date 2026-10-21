@@ -641,9 +641,17 @@ function PanelBody(props: PanelBodyProps): ReactElement {
     const isUser = message.role === 'user'
     const cleanContent = stripToolMarkup(message.content)
     const cleanReasoning = stripToolMarkup(message.reasoning)
+    // A settled answer with reasoning but no visible text can only come from an
+    // output whose body was tool-call markup (a stale reply from before the
+    // filter, or a provider leak). Never leave the reader with a silent blank.
+    const orphanedReasoning = !isUser && !busy && cleanContent === '' && cleanReasoning !== ''
     const body = isUser
       ? cleanContent
-      : (cleanContent === '' && busy ? '…' : renderMarkdown(cleanContent))
+      : cleanContent === '' && busy
+        ? '…'
+        : orphanedReasoning
+          ? <span className={css.emptyBodyNotice}>（这条回答没有正文：原输出可能是已被过滤的工具调用。请重新提问，或到主对话中继续。）</span>
+          : renderMarkdown(cleanContent)
     const reasoningBlock = !isUser && cleanReasoning !== ''
       ? <ReasoningRow text={cleanReasoning} running={busy && message.id === jobId} />
       : null
