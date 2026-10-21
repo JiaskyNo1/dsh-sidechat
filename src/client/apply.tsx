@@ -25,7 +25,7 @@
  */
 
 import * as React from 'react'
-import { useEffect, useState, useSyncExternalStore, type ReactElement } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactElement } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
@@ -147,7 +147,6 @@ interface SessionChatState {
   busy: boolean
   jobId: string | null
   error: string | null
-  markedExcerpt: string | null
 }
 
 function emptySessionChatState(): SessionChatState {
@@ -159,7 +158,6 @@ function emptySessionChatState(): SessionChatState {
     busy: false,
     jobId: null,
     error: null,
-    markedExcerpt: null,
   }
 }
 
@@ -181,22 +179,21 @@ function getSessionStore(sessionKey: string): SessionChatState {
 }
 
 /* ------------------------------------------------------------------------- */
-/* Marked-excerpt composition.                                                */
+/* Marked-excerpt draft composition.                                          */
 /* ------------------------------------------------------------------------- */
 
-/** Explicit marking instruction prepended to a selection-sent user message. */
-const MARKED_QUOTE_INSTRUCTION = '以下是我在主对话中标记的引用内容，请基于这段标记内容回答。'
-/** Trailing reminder so the model keeps the answer grounded in the mark. */
-const MARKED_QUOTE_REMINDER = '请仅依据上述标记内容作答，并在回答中说明依据。'
-
-/** Build the user-message body that carries one marked excerpt as a quote. */
-function buildMarkedUserMessage(excerpt: string): string {
+/**
+ * Turn a marked excerpt into a Markdown quote draft for the composer. The
+ * excerpt is only *staged* here: the user can add their own question and presses
+ * send when they want the answer — nothing is sent automatically.
+ */
+function buildQuoteDraft(excerpt: string): string {
   const quoted = excerpt
     .replace(/\r\n/g, '\n')
     .split('\n')
     .map(line => `> ${line}`)
     .join('\n')
-  return `${MARKED_QUOTE_INSTRUCTION}\n${quoted}\n\n${MARKED_QUOTE_REMINDER}`
+  return `${quoted}\n\n`
 }
 
 /* ------------------------------------------------------------------------- */
@@ -409,12 +406,6 @@ function SelectionSendButton(props: { ctx: Context }): ReactElement | null {
 /** One model entry of the advisory catalog (wire shape from `./remote.ts`). */
 type ModelOption = SidechatModelOption
 
-/** Human-readable truncation for the marked-excerpt chip. */
-function truncateExcerpt(text: string, limit: number): string {
-  const oneLine = text.replace(/\s+/g, ' ').trim()
-  return oneLine.length <= limit ? oneLine : `${oneLine.slice(0, limit - 1)}…`
-}
-
 /** The docked tab body: session-scoped props plus the mounted Remote namespace. */
 type TabBodyProps = PropsRuntime<'sidebar.right.pane.tab'> & { sidechat: SidechatNamespace }
 
@@ -436,6 +427,40 @@ function SidechatTabBody(props: TabBodyProps): ReactElement {
   )
 }
 
+/**
+ * Collapsible reasoning row, presented like the main conversation's disclosure:
+ * one quiet line showing "思考" while streaming / "已思考" when settled, with the
+ * first completed paragraph as the collapsed preview. Expanding shows the full
+ * reasoning in secondary typography. Nothing auto-expands.
+ */
+function ReasoningRow(props: { text: string; running: boolean }): ReactElement {
+  const { text, running } = props
+  const [expanded, setExpanded] = useState(false)
+  const firstLine = (() => {
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim()
+      if (trimmed !== '') return trimmed.replaceAll('**', '')
+    }
+    return ''
+  })()
+  return (
+    <div className={css.reasoning} data-expanded={expanded ? 'true' : undefined}>
+      <button
+        type="button"
+        className={css.reasoningHeader}
+        aria-expanded={expanded}
+        onClick={() => setExpanded(value => !value)}
+      >
+        <span className={css.reasoningIcon} aria-hidden="true">✳</span>
+        <span className={css.reasoningTitle}>{running ? '思考' : '已思考'}</span>
+        {!expanded && firstLine !== '' ? <span className={css.reasoningPreview}>{firstLine}</span> : null}
+        <span className={css.reasoningChevron} aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+      </button>
+      {expanded ? <div className={css.reasoningBody}>{text}</div> : null}
+    </div>
+  )
+}
+
 /** One session's chat surface: header, messages, streaming, model selectors, composer. */
 function PanelBody(props: PanelBodyProps): ReactElement {
   const { sidechat, sessionKey } = props
@@ -452,8 +477,8 @@ function PanelBody(props: PanelBodyProps): ReactElement {
   const [busy, setBusy] = useState(chat.busy)
   const [jobId, setJobId] = useState<string | null>(chat.jobId)
   const [error, setError] = useState<string | null>(chat.error)
-  const [markedExcerpt, setMarkedExcerpt] = useState<string | null>(chat.markedExcerpt)
   const [confirmClear, setConfirmClear] = useState(false)
+  const inputRef = useRef<HTMLTextAreaElement | null>(null)
 
   chat.modelKey = modelKey
   chat.effort = effort
@@ -462,7 +487,6 @@ function PanelBody(props: PanelBodyProps): ReactElement {
   chat.busy = busy
   chat.jobId = jobId
   chat.error = error
-  chat.markedExcerpt = markedExcerpt
 
   const findModel = (key: string): ModelOption | null => {
     if (key === '') return null
@@ -557,17 +581,22 @@ function PanelBody(props: PanelBodyProps): ReactElement {
     })
   }
 
-  // A selection click publishes the excerpt and opens the panel; the body
-  // consumes it here, keeps the chip, and sends the marked message. While a
-  // reply streams the excerpt stays pending so it is not silently dropped.
+  // A selection click publishes the excerpt and opens the tab. The body stages it
+  // as a quote draft in the composer — it does not send anything. The user adds
+  // their question and submits when ready.
   useEffect(() => {
     const pending = shared.pendingExcerpt
     if (pending === null || pending === '') return
-    if (busy) return
-    setMarkedExcerpt(pending)
     patchShared({ pendingExcerpt: null })
-    send(buildMarkedUserMessage(pending))
-  }, [shared.pendingExcerpt, busy])
+    setInput(prev => (prev.trim() === '' ? buildQuoteDraft(pending) : `${buildQuoteDraft(pending)}${prev}`))
+    window.setTimeout(() => {
+      const element = inputRef.current
+      if (element !== null) {
+        element.focus()
+        element.setSelectionRange(element.value.length, element.value.length)
+      }
+    }, 0)
+  }, [shared.pendingExcerpt])
 
   const stop = (): void => {
     if (jobId !== null) {
@@ -582,7 +611,6 @@ function PanelBody(props: PanelBodyProps): ReactElement {
     setMessages([])
     setError(null)
     setConfirmClear(false)
-    setMarkedExcerpt(null)
   }
 
   const modelOptions: ReactElement[] = []
@@ -606,12 +634,7 @@ function PanelBody(props: PanelBodyProps): ReactElement {
       ? message.content
       : (message.content === '' && busy ? '…' : renderMarkdown(message.content))
     const reasoningBlock = !isUser && message.reasoning !== ''
-      ? (
-        <details className={css.reasoning} open={busy}>
-          <summary>💭 思考过程</summary>
-          <div className={css.reasoningBody}>{message.reasoning}</div>
-        </details>
-      )
+      ? <ReasoningRow text={message.reasoning} running={busy && message.id === jobId} />
       : null
     return (
       <div key={message.id} className={isUser ? `${css.msg} ${css.msgUser}` : `${css.msg} ${css.msgAssistant}`}>
@@ -652,24 +675,12 @@ function PanelBody(props: PanelBodyProps): ReactElement {
         ) : messageNodes}
       </div>
       <div className={css.composer}>
-        {markedExcerpt !== null ? (
-          <div className={css.markedChip} data-sidechat-marked="true">
-            <span className={css.markedLabel}>已标记引用</span>
-            <span className={css.markedText} title={markedExcerpt}>{truncateExcerpt(markedExcerpt, 160)}</span>
-            <button
-              className={css.markedClear}
-              type="button"
-              title="清除标记引用"
-              aria-label="清除标记引用"
-              onClick={() => setMarkedExcerpt(null)}
-            >✕</button>
-          </div>
-        ) : null}
         <div className={css.inputRow}>
           <textarea
+            ref={inputRef}
             className={css.input}
             value={input}
-            placeholder="提问…"
+            placeholder="输入问题…（划选主对话文字可插入引用，Enter 发送，Shift+Enter 换行）"
             rows={2}
             disabled={busy}
             onChange={event => setInput(event.target.value)}

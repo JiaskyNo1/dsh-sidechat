@@ -171,41 +171,114 @@ export class SidechatService {
     try {
       const derived = session.deriveMessages()
       const picked: { role: string; text: string }[] = []
-      for (let i = derived.length - 1; i >= 0 && picked.length < 12; i -= 1) {
+      // Keep a full working picture of the main conversation: recent turns plus
+      // the tool calls/results that produced their answers. A char budget bounds
+      // the whole transcript; roughly the size of a normal context window slice.
+      let budget = 48_000
+      for (let i = derived.length - 1; i >= 0 && picked.length < 40 && budget > 0; i -= 1) {
         const message = derived[i]
         if (message === undefined) continue
-        if (message.role !== 'user' && message.role !== 'assistant') continue
-        const text = message.content
-          .filter(block => block !== null && block !== undefined && block.type === 'text')
-          .map(block => (block as { text: string }).text)
-          .join('')
-          .slice(0, 2000)
+        const text = this.renderMessageText(message)
         if (text === '') continue
-        picked.push({ role: message.role, text })
+        const clipped = text.slice(0, Math.min(6_000, budget))
+        budget -= clipped.length
+        const role = message.role === 'assistant' ? 'assistant' : message.role === 'tool' ? 'tool' : 'user'
+        picked.push({ role, text: clipped })
       }
       out.messages = picked.reverse()
     } catch { /* message derivation failed */ }
     return out
   }
 
-  private buildSystemPrompt(context: SidechatProjectContext, provider: string, model: string, reasoningEffort?: string): string {
+  /**
+   * Flatten one durable message into the text the side-chat prompt shows:
+   * visible text plus a compact account of tool calls (and, for tool-role
+   * messages, the result). Reasoning blocks are omitted — the side chat does
+   * its own reasoning and does not need the main agent's private trace.
+   */
+  private renderMessageText(message: Message): string {
+    const parts: string[] = []
+    for (const block of message.content) {
+      if (block === null || block === undefined) continue
+      if (block.type === 'text') {
+        const text = String(block.text ?? '').trim()
+        if (text !== '') parts.push(text)
+      } else if (block.type === 'tool-call') {
+        const args = String(block.arguments ?? '').trim()
+        parts.push(`[调用工具 ${block.name}${args === '' ? '' : ` ${args.slice(0, 500)}`}]`)
+      }
+    }
+    const body = parts.join('\n').trim()
+    if (body === '') return ''
+    if (message.role !== 'tool') return body
+    const failed = (message as { isError?: boolean }).isError === true
+    return `[工具结果${failed ? '（失败）' : ''}] ${body.slice(0, 1_200)}`
+  }
+
+  /**
+   * Read workspace instruction files (AGENTS.md / CLAUDE.md and their local
+   * overlays) from the session working directory, mirroring what the main
+   * agent receives as durable instruction context. Best-effort: a missing fs
+   * service or file only removes this section.
+   */
+  private async readProjectInstructions(root: string | null): Promise<string | null> {
+    if (root === null) return null
+    const fs = this.ctx.get('fs') as unknown as FsFace | undefined
+    if (fs === undefined) return null
+    const chunks: string[] = []
+    for (const name of ['AGENTS.md', 'CLAUDE.md', 'AGENTS.local.md', 'CLAUDE.local.md']) {
+      try {
+        const target = await fs.resolve(name, { cwd: root })
+        const text = (await fs.readText(target)).trim()
+        if (text !== '') chunks.push(`### ${name}\n${text}`)
+      } catch { /* no such instruction file */ }
+    }
+    if (chunks.length === 0) return null
+    return chunks.join('\n\n').slice(0, 16_000)
+  }
+
+  private buildSystemPrompt(
+    context: SidechatProjectContext,
+    instructions: string | null,
+    provider: string,
+    model: string,
+    reasoningEffort?: string,
+  ): string {
     const lines = [
-      'You are a coding assistant embedded in the DeepSeek Harness side-chat panel.',
+      `You are a coding agent powered by the ${model} model.`,
+      'You are answering inside the DeepSeek Harness side-chat panel, which runs alongside the main conversation.',
       `You are currently running as model "${model}" from provider "${provider}"`
         + (reasoningEffort !== undefined ? ` with reasoning effort "${reasoningEffort}"` : '') + '.',
       'When the user asks which model you are, answer with exactly this model id.',
-      'The user is working inside the project below. Use this context to answer their questions.',
+      '',
+      'This panel has no tools: you cannot read files, run commands, or change the workspace. Use the project facts and main conversation below as your evidence. When an answer would require inspecting files or running something, state precisely what the main conversation should check instead of guessing.',
+      '',
+      'Answer with the same judgment, depth, and rigor as the main assistant. Think through the problem carefully before answering; do not answer superficially or over-briefly. Prefer concrete facts from the conversation over generic advice.',
     ]
-    if (context.root !== null) lines.push(`- Project root: ${context.root}`)
+    lines.push('', '## Project')
+    if (context.root !== null) lines.push(`- Working directory: ${context.root}`)
     if (context.branch !== null) lines.push(`- Git branch: ${context.branch}`)
+    if (context.conversation.title !== null) lines.push(`- Session title: ${context.conversation.title}`)
+
+    if (instructions !== null) {
+      lines.push('', '## Workspace instructions', 'The workspace instruction files below apply to your answers:', '', instructions)
+    }
+
     if (context.conversation.messages.length > 0) {
-      lines.push('')
-      lines.push('The main conversation in progress (most recent last) is below; keep your answer consistent with it:')
+      lines.push('', '## Main conversation context', 'The main conversation in progress (oldest first, most recent last). '
+        + 'Tool calls and their results are included so the answer stays grounded in what actually happened:', '')
       for (const message of context.conversation.messages) {
-        lines.push(`${message.role}: ${message.text}`)
+        lines.push(`[${message.role}]`, message.text, '')
       }
     }
-    lines.push('Answer in the same language the user writes in. Be concise and accurate; say clearly when you are not sure.')
+
+    lines.push(
+      '## Answering rules',
+      '- Answer in the same language the user writes in.',
+      '- If the user message contains a marked quote (lines starting with ">"), that excerpt is the focus: base the answer on it and say what the basis is.',
+      '- Ground claims in the conversation and project facts above; say clearly when you are not sure or when the evidence is missing.',
+      '- Reply with well-structured Markdown when it helps: short paragraphs, lists, and code blocks.',
+    )
     return lines.join('\n')
   }
 
@@ -290,21 +363,25 @@ export class SidechatService {
 
     const provider = customProvider ?? selection.provider
     const model = customModel ?? selection.model
-    const reasoningEffort = customProvider !== null
-      ? (customEffort ?? undefined)
-      : selection.reasoningEffort
+    // Prefer the browser's explicit effort (the panel seeds it from the model's
+    // default capability). When it is absent, fall back to the main route's
+    // effort only if the selected route is that same route — an effort id is
+    // model-specific.
+    const usesMainRoute = provider === selection.provider && model === selection.model
+    const reasoningEffort = customEffort ?? (usesMainRoute ? selection.reasoningEffort : undefined)
 
     const history = this.buildHistory(raw, provider, model)
     if (history.length === 0) throw new Error('side chat: no messages to send')
 
     const context = await this.readProjectContext(sessionId)
+    const instructions = await this.readProjectInstructions(context.root)
+    // No sampling overrides: the main conversation uses the route's defaults, and
+    // the side chat should behave like the same assistant on the same route.
     const options: GenerateOptions = {
       provider,
       model,
       messages: history,
-      system: this.buildSystemPrompt(context, provider, model, reasoningEffort),
-      temperature: 0.7,
-      maxTokens: 4096,
+      system: this.buildSystemPrompt(context, instructions, provider, model, reasoningEffort),
       ...(reasoningEffort !== undefined
         ? { reasoningEffort: reasoningEffort as ReasoningEffortId }
         : {}),
