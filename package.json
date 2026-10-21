@@ -1,6 +1,6 @@
 {
     "name":  "dsh-sidechat",
-    "version":  "0.3.1",
+    "version":  "0.3.2",
     "description":  "Docked right-Sidebar side chat for the DeepSeek Harness 0.2.1 Web GUI: shared session context, selection-marked questions, streaming replies and a Ctrl+J shortcut",
     "license":  "MIT",
     "type":  "module",

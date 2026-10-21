@@ -427,6 +427,15 @@ function SidechatTabBody(props: TabBodyProps): ReactElement {
   )
 }
 
+/** Strip tool-call markup if an older host or a provider leak ever delivers it. */
+function stripToolMarkup(text: string): string {
+  return text
+    .replace(/<\s*\/?\s*(?:\|\s*)*DSML\s*(?:\|\s*)*[^>]*calls[^>]*>[\s\S]*?<\s*\/\s*(?:\|\s*)*DSML\s*(?:\|\s*)*[^>]*calls[^>]*>/gi, '')
+    .replace(/<\s*\/?\s*(?:\|\s*)*DSML\s*(?:\|\s*)*[^>]*>/gi, '')
+    .replace(/<\|[^>]*\|>/g, '')
+    .trim()
+}
+
 /**
  * Collapsible reasoning row, presented like the main conversation's disclosure:
  * one quiet line showing "思考" while streaming / "已思考" when settled, with the
@@ -630,11 +639,13 @@ function PanelBody(props: PanelBodyProps): ReactElement {
 
   const messageNodes = messages.map(message => {
     const isUser = message.role === 'user'
+    const cleanContent = stripToolMarkup(message.content)
+    const cleanReasoning = stripToolMarkup(message.reasoning)
     const body = isUser
-      ? message.content
-      : (message.content === '' && busy ? '…' : renderMarkdown(message.content))
-    const reasoningBlock = !isUser && message.reasoning !== ''
-      ? <ReasoningRow text={message.reasoning} running={busy && message.id === jobId} />
+      ? cleanContent
+      : (cleanContent === '' && busy ? '…' : renderMarkdown(cleanContent))
+    const reasoningBlock = !isUser && cleanReasoning !== ''
+      ? <ReasoningRow text={cleanReasoning} running={busy && message.id === jobId} />
       : null
     return (
       <div key={message.id} className={isUser ? `${css.msg} ${css.msgUser}` : `${css.msg} ${css.msgAssistant}`}>
