@@ -56,6 +56,7 @@ import css from './sidechat.module.css'
 export const inject: string[] = ['slots', 'remote', 'sidebarRightTabs']
 
 /** Tab type discriminator: what `ctx.sidebarRight.openTab` names. */
+export const SIDECHAT_CLIENT_VERSION = '0.3.4'
 export const SIDECHAT_KIND = 'sidechat'
 /** This implementation's identity in the tab system; the body registers under it. */
 export const SIDECHAT_TAB_ID = 'dsh-sidechat'
@@ -668,7 +669,7 @@ function PanelBody(props: PanelBodyProps): ReactElement {
   return (
     <>
       <div className={css.header}>
-        <span className={css.headerTitle}>侧边聊天</span>
+        <span className={css.headerTitle}>侧边聊天</span>`n        <span className={css.headerVersion} title="侧边聊天插件版本">v{SIDECHAT_CLIENT_VERSION}</span>
         <label className={css.switch} title="划选文字时显示「添加到侧边聊天」按钮">
           <input
             type="checkbox"

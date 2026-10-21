@@ -425,3 +425,11 @@
   font-style: italic;
   color: var(--dsw-alias-label-secondary);
 }
+
+/* Client version marker (helps confirm hot updates in the running page). */
+.headerVersion {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--dsw-alias-label-caption);
+  opacity: 0.8;
+}
