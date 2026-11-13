@@ -90,6 +90,8 @@ export class SidechatService {
   private readonly ctx: Context
   private readonly jobs = new Map<string, Job>()
   private seq = 0
+  /** Stable routing id for a panel opened without a session (see {@link routingSessionId}). */
+  private fallbackSessionId: string | undefined
 
   /** Visible binding consumed by the Gateway's strict dispatch validation. */
   readonly typertRemote: TypertGatewayBinding<this>
@@ -311,6 +313,24 @@ export class SidechatService {
     })
   }
 
+  /**
+   * The `GenerateOptions.sessionId` this panel sends with every request.
+   *
+   * pi-ai's OpenCode adapters turn that option into the `x-opencode-session`
+   * header, and the OpenCode Go gateway rejects a request without it
+   * (`400 MissingSessionID`). The panel keeps a conversation id of its own,
+   * derived from the DSH session so it stays stable across turns, instead of
+   * reusing the main agent's id: the two conversations then keep separate
+   * routing and prompt-cache affinity. A panel opened without a session still
+   * gets one stable id, so the request is routable instead of failing.
+   */
+  private routingSessionId(sessionId: string): SessionId {
+    if (sessionId !== '') return `sidechat:${sessionId}` as unknown as SessionId
+    const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+    this.fallbackSessionId ??= `sidechat:${id}`
+    return this.fallbackSessionId as unknown as SessionId
+  }
+
   /** Project + session context for the panel header and every generation. */
   async getContext(args: SidechatContextArgs): Promise<SidechatProjectContext> {
     return this.readProjectContext(String(args?.sessionId ?? ''))
@@ -383,6 +403,7 @@ export class SidechatService {
       model,
       messages: history,
       system: this.buildSystemPrompt(context, instructions, provider, model, reasoningEffort),
+      sessionId: this.routingSessionId(sessionId),
       ...(reasoningEffort !== undefined
         ? { reasoningEffort: reasoningEffort as ReasoningEffortId }
         : {}),
